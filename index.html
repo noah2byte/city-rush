@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>도심 질주</title>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div id="pos"><span id="posNum">6</span><small>위</small><span id="posTotal" class="total">/8</span></div>
+      <div id="lap">LAP 1/3</div>
+    </div>
+    <div id="timer">00:00.00</div>
+    <div class="hud-right"><span id="speedNum">0</span><small> km/h</small></div>
+  </div>
+  <ol id="board" class="hidden" aria-label="실시간 순위"></ol>
+  <div id="zone"></div>
+  <div id="toast"></div>
+  <div id="banners"></div>
+  <canvas id="confetti"></canvas>
+
+  <div id="start" class="overlay"><div class="card">
+    <h1>도심 질주</h1>
+    <p>밤의 서울을 3바퀴 도는 레이스.<br>라이벌 7대를 제치고 1등으로 들어와라.</p>
+    <p class="keys">←/→ 또는 A/D 조향 · ↑/W 가속 · ↓/S 브레이크<br>커브에서는 바깥으로 밀리니 핸들을 꺾어 버텨라<br>주황 화살표 패드를 밟으면 부스트<br>모바일은 화면을 좌우로 끌어 조향 (자동 가속)</p>
+    <p id="bestLine" class="keys"></p>
+    <button id="startBtn" disabled>불러오는 중</button>
+  </div></div>
+
+  <p class="credit">차량 모델: Car Concept by Eric Chadwick, Darmstadt Graphics Group (CC BY 4.0) · 환경맵: Poly Haven (CC0)</p>
+
+  <div id="result" class="overlay hidden"><div class="card wide">
+    <h2 id="resultTitle">완주</h2>
+    <table><tbody id="resultTable"></tbody></table>
+    <p id="resultBest" class="keys"></p>
+    <button id="retryBtn">다시 달리기</button>
+  </div></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
