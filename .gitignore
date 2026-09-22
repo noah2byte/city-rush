@@ -4,3 +4,4 @@ dist/
 # 외부 자산은 스크립트로 재생성한다 (README 참고)
 src/assets/
 .asset-cache/
+.asset-originals/

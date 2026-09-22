@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { asphaltTextures } from './textures.js';
+import { asphaltTextures, skyTexture, envTexture } from './textures.js';
+import { MAPS, DEFAULT_MAP } from './maps.js';
 import { bend, bent, bendOffset, noCull } from './bend.js';
-import { RaceCourse, ZONES, CHUNK } from './course.js';
-import { builders, releaseChunk, billboards, padTexture, startLine, boostPad, resetFeatures } from './districts.js';
+import { RaceCourse, CHUNK } from './course.js';
+import { builders, releaseChunk, billboards, padTexture, startLine, boostPad, resetFeatures, itemBoxRow } from './districts.js';
 import { seed } from './rng.js';
 import { Rain } from './weather.js';
 
@@ -13,56 +14,53 @@ const VIEW = 300;              // 앞쪽으로 미리 만들어 둘 거리(m). �
 const LIGHT_FAR = -44, LIGHT_NEAR = 10; // 실제 광원을 붙일 구간
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 
-export function createWorld(renderer, envTex) {
+export function createWorld(renderer, nightEnvTex) {
   const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2('#1C1A28', 0.009);
 
-  const sky = document.createElement('canvas');
-  sky.width = 2; sky.height = 256;
-  const sg = sky.getContext('2d');
-  const grad = sg.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#05070F');
-  grad.addColorStop(0.6, '#161A2E');
-  grad.addColorStop(1, '#4A3446'); // 지평선의 붉은 기운은 도시 불빛이 대기에 번진 광해를 흉내 낸다
-  sg.fillStyle = grad; sg.fillRect(0, 0, 2, 256);
-  const skyTex = new THREE.CanvasTexture(sky);
-  skyTex.colorSpace = THREE.SRGBColorSpace;
-  scene.background = skyTex;
-  scene.fog = new THREE.FogExp2('#1C1A28', ZONES.downtown.fog);
-
+  // ── 맵별 하늘·반사·노면을 미리 만들어 둔다. 차고에서 맵을 넘길 때 바로 바꿔 보여주기 위해서다 ──
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromEquirectangular(envTex).texture;
-  scene.environmentIntensity = 0.7;
-  envTex.dispose();
+  const looks = {};
+  for (const [id, map] of Object.entries(MAPS)) {
+    const t = map.theme;
+    const env = t.env.hdr ? pmrem.fromEquirectangular(nightEnvTex).texture : pmrem.fromEquirectangular(envTexture(t.env)).texture;
+    looks[id] = { sky: skyTexture(t.sky), env, road: asphaltTextures(map.road) };
+  }
+  nightEnvTex.dispose();
   pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 500);
   camera.position.set(0, 2.6, 7);
   camera.lookAt(0, 1, -8);
 
-  scene.add(new THREE.HemisphereLight('#6F7FB8', '#140F1A', 0.35 * Math.PI));
-  const moon = new THREE.DirectionalLight('#9FB0FF', 0.25 * Math.PI);
-  moon.position.set(8, 20, 10);
-  scene.add(moon);
+  // 주변광과 태양(밤에는 달)광. 세기와 색은 맵 테마가 정한다
+  const hemi = new THREE.HemisphereLight();
+  const sun = new THREE.DirectionalLight();
+  scene.add(hemi, sun);
 
-  // ── 도로·보도: 고정 메시 + 텍스처 스크롤. 곡선 셰이더가 정점 단위로 휘므로 길이 방향을 잘게 나눈다 ──
+  // ── 도로: 고정 메시 + 텍스처 스크롤. 곡선 셰이더가 정점 단위로 휘므로 길이 방향을 잘게 나눈다 ──
   // 보도·연석은 구역마다 모양이 달라 청크(districts.js)에서 만든다
   const staticLen = VIEW + 40;
   const segs = Math.ceil(staticLen / 2.5);
-  const asphalt = asphaltTextures();
   const reps = staticLen / ROAD_TILE;
-  asphalt.map.repeat.set(1, reps);
-  asphalt.rmMap.repeat.set(1, reps);
-  const roadMat = bent(new THREE.MeshStandardMaterial({ map: asphalt.map, roughnessMap: asphalt.rmMap, roughness: 1, metalness: 0 }));
+  for (const l of Object.values(looks)) {
+    l.road.map.repeat.set(1, reps);
+    l.road.rmMap.repeat.set(1, reps);
+  }
+  const roadMat = bent(new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }));
   const road = new THREE.Mesh(new THREE.PlaneGeometry(roadHalf * 2, staticLen, 1, segs).rotateX(-Math.PI / 2), roadMat);
   road.position.z = -staticLen / 2 + despawnZ;
   scene.add(noCull(road));
+  let asphalt = null;
 
   // ── 청크 스트리밍 ──
   // 월드를 24m 청크로 나눠, 앞쪽에 새 청크를 만들고 지나간 청크는 풀에 돌려준다.
   // 청크마다 그 위치의 구역(course)에 맞는 건물·소품을 조립하므로 달릴수록 풍경이 바뀐다
   const params = new URLSearchParams(location.search);
   const courseOptions = { first: params.get('zone'), weather: params.get('weather') };
-  let course = new RaceCourse(undefined, courseOptions);
+  let mapId = MAPS[params.get('map')] ? params.get('map') : DEFAULT_MAP; // ?map=coast-day 로 맵을 고정해 확인할 수 있다
+  let theme = MAPS[mapId].theme;
+  let course = new RaceCourse(MAPS[mapId].zones, undefined, courseOptions);
   const chunks = [];
   let traveled = 0;       // 카메라(플레이어)의 코스상 위치
   let nextChunkStart = 0;
@@ -79,17 +77,38 @@ export function createWorld(renderer, envTex) {
       index: lapPos / CHUNK,
       isFirst: start === seg.start,
       isLast: start + CHUNK >= seg.end,
+      bend: course.bendAt(start)[0], // 이 청크의 좌우 곡률. 급커브 경고판을 바깥쪽에 세울 때 쓴다
     });
     if (lapPos === 0) startLine(chunk);
     for (const pad of course.padsBetween(start, start + CHUNK)) boostPad(chunk, pad.x, -(pad.d - start));
+    for (const d of course.itemRowsBetween(start, start + CHUNK)) itemBoxRow(chunk, -(d - start));
     scene.add(chunk.group);
     chunks.push(chunk);
     nextChunkStart += CHUNK;
   }
 
+  // 맵 바꾸기: 하늘·반사·조명·노면을 바꾸고 그 맵의 새 코스로 다시 채운다
+  function setMap(id, position = traveled) {
+    mapId = MAPS[id] ? id : DEFAULT_MAP;
+    theme = MAPS[mapId].theme;
+    const look = looks[mapId];
+    scene.background = look.sky;
+    scene.environment = look.env;
+    scene.environmentIntensity = theme.envIntensity;
+    scene.fog.color.set(theme.fogColor);
+    hemi.color.set(theme.hemi[0]); hemi.groundColor.set(theme.hemi[1]); hemi.intensity = theme.hemi[2] * Math.PI; // r155+ 물리 단위라 π를 곱한다
+    sun.color.set(theme.sun[0]); sun.intensity = theme.sun[1] * Math.PI; sun.position.fromArray(theme.sun[2]);
+    asphalt = look.road;
+    roadMat.map = asphalt.map; roadMat.roughnessMap = asphalt.rmMap; roadMat.needsUpdate = true;
+    renderer.toneMappingExposure = theme.exposure;
+    reset(null, position);
+    api.onMapChange?.(theme);
+    return theme;
+  }
+
   // 새 레이스: 청크를 모두 비우고 새 코스의 position 위치부터 다시 채운다
   function reset(newCourse, position) {
-    course = newCourse ?? new RaceCourse(undefined, courseOptions);
+    course = newCourse ?? new RaceCourse(MAPS[mapId].zones, undefined, courseOptions);
     for (const c of chunks) { releaseChunk(c); c.group.removeFromParent(); }
     chunks.length = 0;
     traveled = position;
@@ -114,9 +133,9 @@ export function createWorld(renderer, envTex) {
 
   // ── 구역 상태 ──
   let zoneKey = null;
-  let fogTarget = ZONES.downtown.fog;
+  let fogTarget = 0.009;
   const bendTarget = new THREE.Vector2();
-  const api = { scene, camera, update, reset, resize, onZone: null, zoneName: '', get course() { return course; } };
+  const api = { scene, camera, update, reset, setMap, resize, onZone: null, onMapChange: null, zoneName: '', get course() { return course; }, get mapId() { return mapId; }, get theme() { return theme; } };
 
   // position: 플레이어의 코스상 위치(m). 레이스 로직이 위치를 정하고 월드는 그 위치를 비춘다
   function update(dt, position, velocity) {
@@ -132,11 +151,14 @@ export function createWorld(renderer, envTex) {
       releaseChunk(old);
       old.group.removeFromParent();
     }
-    for (const c of chunks) c.group.position.z = traveled - c.start;
+    for (const c of chunks) {
+      c.group.position.z = traveled - c.start;
+      if (c.spinners) for (const b of c.spinners) b.rotation.y += dt * 2; // 아이템 박스는 제자리에서 돈다
+    }
 
     // 구역이 바뀌면 안개 농도·곡률 성격을 바꾼다
     const seg = course.at(Math.max(traveled, 0));
-    const zone = ZONES[seg.type];
+    const zone = course.zones[seg.type];
     if (seg.key !== zoneKey) {
       zoneKey = seg.key;
       const raining = seg.weather === 'rain';
@@ -172,7 +194,7 @@ export function createWorld(renderer, envTex) {
         bendOffset(z, tmp); // 휘어 보이는 가로등 위치에 광원을 맞춘다
         light.position.set(a.x + tmp.x, a.y + tmp.y, z);
         light.color.set(a.color);
-        light.intensity = CONFIG.lamps.intensity * fade;
+        light.intensity = CONFIG.lamps.intensity * fade * theme.lamps; // 낮 맵은 0
       }
     }
     for (; used < lights.length; used++) lights[used].intensity = 0;
@@ -183,6 +205,6 @@ export function createWorld(renderer, envTex) {
     camera.updateProjectionMatrix();
   }
 
-  reset(course, 0); // 첫 프레임 전에 청크를 채운다
+  setMap(mapId, 0); // 첫 프레임 전에 테마를 입히고 청크를 채운다
   return api;
 }

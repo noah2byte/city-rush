@@ -38,6 +38,33 @@ canvas { display: block; position: fixed; inset: 0; }
 .hud-right small { font-size: 1rem; }
 #hud.boosting #speedNum { color: #FFE14D; text-shadow: 0 0 14px #FF7A00; }
 
+/* 속도선·피격 섬광 */
+#speedlines { width: 100vw; height: 100vh; pointer-events: none; z-index: 1; }
+#flash { position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: 0; }
+#flash.hit { animation: flash-hit .45s ease-out; background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 40, 20, .55)); }
+#flash.nuke { animation: flash-nuke 1.6s ease-out; background: #FFF6E0; }
+@keyframes flash-nuke { 0% { opacity: 1; } 25% { opacity: .85; } 100% { opacity: 0; } }
+/* 핵 경보: 화면 가장자리가 붉게 맥박친다 */
+body.alarm::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 30, 10, .45)); animation: alarm .5s ease-in-out infinite alternate; }
+@keyframes alarm { from { opacity: .25; } to { opacity: 1; } }
+@keyframes flash-hit { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 아이템 칸: 아이템이 있으면 빛나고, 모바일에서는 눌러서 쓴다 */
+#item {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  width: 86px; height: 86px; border-radius: 50%; padding: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(10, 14, 30, .6); border: 3px solid rgba(255, 255, 255, .25); color: var(--ink);
+}
+#item.empty { opacity: .45; }
+#item.ready { border-color: var(--gold); box-shadow: 0 0 18px rgba(255, 210, 63, .6); animation: item-ready 1s ease-in-out infinite alternate; }
+@keyframes item-ready { to { box-shadow: 0 0 30px rgba(255, 210, 63, .9); } }
+#itemIcon { font-size: 2rem; line-height: 1; }
+#itemName { font-size: .7rem; margin-top: 2px; }
+#item em { font-style: normal; font-size: .6rem; opacity: .6; }
+@media (hover: none) { #item em { display: none; } }
+
 /* 실시간 순위표 */
 #board {
   position: fixed; right: 18px; top: calc(76px + env(safe-area-inset-top, 0px));
@@ -77,6 +104,8 @@ canvas { display: block; position: fixed; inset: 0; }
 .banner.final { color: #FF6B3D; }
 .banner.win { color: var(--gold); font-size: clamp(5rem, 22vw, 12rem); animation: win 2.6s ease-out forwards; }
 .banner.finish { color: var(--ink); animation-duration: 2.6s; }
+.banner.nuke { color: #FFD23F; font-size: clamp(2.4rem, 9vw, 5.5rem); text-shadow: 0 0 20px #FF2A1A, 0 4px 24px rgba(0, 0, 0, .8); animation: banner 2.4s ease-out forwards; }
+.banner.podium { color: #FFB45C; font-size: clamp(3.5rem, 14vw, 8rem); animation: win 2.6s ease-out forwards; }
 @keyframes banner { 0% { transform: scale(1.8); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.95); } }
 @keyframes win { 0% { transform: scale(3) rotate(-8deg); opacity: 0; } 12% { transform: scale(1) rotate(0); opacity: 1; } 20% { transform: scale(1.15); } 30% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
 
@@ -99,6 +128,7 @@ td:first-child { width: 2em; text-align: right; opacity: .7; }
 td:last-child { text-align: right; }
 td .swatch { margin-right: 8px; }
 tr.me td { color: var(--gold); }
+.odds { font-size: 1rem; color: var(--sodium); margin: 4px 0 8px; }
 button {
   font: inherit; font-size: 1.2rem; background: var(--sodium); color: var(--night);
   border: 0; border-radius: 8px; padding: 12px 32px; cursor: pointer;
@@ -109,9 +139,40 @@ button:disabled { opacity: .6; cursor: wait; }
   position: fixed; left: 0; right: 0; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   margin: 0; text-align: center; font-size: .75rem; opacity: .55; pointer-events: none;
 }
+/* ── 차고 ── 가운데는 비워 3D 차가 보이게 하고, 제목은 위·선택 패널은 아래에 둔다 */
+.garage { flex-direction: column; justify-content: space-between; align-items: center; padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(34px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.garage > * { pointer-events: auto; position: relative; }
+/* 위아래를 어둡게 깔아 밝은 건물 위에서도 제목과 패널이 읽히게 한다. 가운데(차가 보이는 곳)는 비운다 */
+.garage::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(8, 10, 22, .75), transparent 22%, transparent 55%, rgba(8, 10, 22, .7)); }
+.garage-title { text-align: center; text-shadow: 0 2px 12px rgba(0, 0, 0, .7); }
+.garage-title h1 { margin-bottom: 4px; }
+.garage-title p { margin: 0; opacity: .85; }
+.garage-panel { width: min(420px, 100%); max-width: none; padding: 18px 20px; }
+.garage-panel.loading .model-row, .garage-panel.loading .colors { opacity: .4; pointer-events: none; }
+.model-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.model-name { display: flex; flex-direction: column; }
+.model-name strong { font-family: 'Black Han Sans', 'Do Hyeon', sans-serif; font-weight: 400; font-size: 1.7rem; }
+.model-name span { font-size: .9rem; opacity: .7; }
+.arrow { padding: 8px 14px; font-size: 1rem; background: rgba(255, 255, 255, .1); color: var(--ink); }
+.arrow:hover { background: rgba(255, 255, 255, .2); }
+.colors { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 4px; }
+.colors.disabled { opacity: .35; pointer-events: none; }
+.color { width: 30px; height: 30px; padding: 0; border-radius: 50%; background: var(--c); border: 2px solid rgba(255, 255, 255, .25); }
+.color[aria-checked="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px var(--sodium); }
+.color-name { font-size: .9rem; opacity: .75; margin-bottom: 10px; min-height: 1.2em; }
+.garage-panel .keys { font-size: .8rem; margin-bottom: 10px; }
+.btns { display: flex; gap: 10px; justify-content: center; }
+/* 차고 단계: 1단계(차·색)와 2단계(맵) 중 하나만 보인다 */
+.garage-panel[data-step="1"] .step2, .garage-panel[data-step="2"] .step1 { display: none; }
+.map-desc { font-size: .95rem; opacity: .85; margin: 12px 0 14px; min-height: 3em; }
+button.ghost { background: rgba(255, 255, 255, .12); color: var(--ink); }
+@media (max-height: 640px) { .garage-panel .keys:first-of-type { display: none; } } /* 낮은 화면에서는 조작법을 빼 차가 가려지지 않게 한다 */
+
 /* #hud 같은 id 선택자의 display가 클래스보다 우선해 숨김이 무시되므로 !important를 쓴다 */
 .hidden { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   #zone, #toast { transition: none; transform: none; }
   .banner, #pos.up, #pos.down { animation-duration: .01s; }
+  body.alarm::after { animation: none; opacity: .6; }
 }

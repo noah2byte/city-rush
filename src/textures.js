@@ -88,36 +88,51 @@ export function facadeTextures(variant) {
 }
 
 // 젖은 아스팔트: 거칠기 맵에 물웅덩이(낮은 거칠기)를 섞어 환경맵 반사가 군데군데 번들거리게 한다
-export function asphaltTextures() {
+// 도로 스타일. 맵마다 노면 느낌이 달라야 같은 게임이라도 다른 장소처럼 느껴진다
+const ROAD_STYLES = {
+  // 젖은 밤 아스팔트: 물웅덩이(낮은 거칠기)가 환경맵을 군데군데 번들거리게 비춘다
+  night: { base: '#2B2B30', speckle: [40, 44], puddles: 14, rough: 175, lane: '#CFCDC6', edge: '#D9B44A' },
+  // 마른 낮 아스팔트: 밝고 거칠며 웅덩이가 없다
+  day: { base: '#3E3E44', speckle: [55, 60], puddles: 0, rough: 215, lane: '#F4F2EC', edge: '#F2C230' },
+  // 하늘 섬: 옅은 대리석 길에 금빛 차선
+  sky: { base: '#9C94B4', speckle: [140, 150], puddles: 0, rough: 120, lane: '#E8C25A', edge: '#7FD8FF' }, // 너무 밝으면 햇빛에 하얗게 날아간다
+};
+
+export function asphaltTextures(style = 'night') {
+  const st = ROAD_STYLES[style];
   const S = 512;
   const [cBase, gBase] = canvas(S, S);
   const [cRM, gRM] = canvas(S, S);
-  gBase.fillStyle = '#2B2B30'; gBase.fillRect(0, 0, S, S);
+  gBase.fillStyle = st.base; gBase.fillRect(0, 0, S, S);
   for (let i = 0; i < 20000; i++) {
     const v = (Math.random() * 60) | 0;
-    gBase.fillStyle = `rgba(${v + 40},${v + 40},${v + 44},.35)`;
+    gBase.fillStyle = `rgba(${v + st.speckle[0]},${v + st.speckle[0]},${v + st.speckle[1]},.35)`;
     gBase.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5);
   }
-  gRM.fillStyle = 'rgb(0,175,0)'; gRM.fillRect(0, 0, S, S);
-  for (let i = 0; i < 14; i++) {
+  gRM.fillStyle = `rgb(0,${st.rough},0)`; gRM.fillRect(0, 0, S, S);
+  for (let i = 0; i < st.puddles; i++) {
     const x = Math.random() * S, y = Math.random() * S, r = 20 + Math.random() * 70;
     const grad = gRM.createRadialGradient(x, y, 0, x, y, r);
     grad.addColorStop(0, 'rgb(0,25,0)');
-    grad.addColorStop(1, 'rgba(0,175,0,0)');
+    grad.addColorStop(1, `rgba(0,${st.rough},0,0)`);
     gRM.fillStyle = grad; gRM.fillRect(x - r, y - r, r * 2, r * 2);
     gBase.fillStyle = 'rgba(0,0,0,.18)'; // 젖은 곳은 색도 약간 짙다
     gBase.beginPath(); gBase.arc(x, y, r * 0.7, 0, Math.PI * 2); gBase.fill();
+  }
+  if (style === 'sky') { // 대리석 결: 흐릿한 사선 무늬
+    gBase.strokeStyle = 'rgba(150,140,180,.18)'; gBase.lineWidth = 2;
+    for (let i = 0; i < 18; i++) { gBase.beginPath(); gBase.moveTo(Math.random() * S, 0); gBase.bezierCurveTo(Math.random() * S, S / 3, Math.random() * S, S * 2 / 3, Math.random() * S, S); gBase.stroke(); }
   }
   // 차선을 도로 텍스처에 직접 그린다. 차선을 별도 메시로 두면 곡선 셰이더에서 따로 휘어
   // 도로와 어긋나고, 수십 개 메시를 스크롤시키는 비용도 든다
   // 텍스처 한 장 = 도로 폭 12m × 길이 12m
   const px = x => ((x + 6) / 12) * S;
   for (const x of [-3, 0, 3]) {
-    gBase.fillStyle = '#CFCDC6'; gBase.fillRect(px(x) - 3, 0, 6, S / 3); // 4m 칠하고 8m 비운다
+    gBase.fillStyle = st.lane; gBase.fillRect(px(x) - 3, 0, 6, S / 3); // 4m 칠하고 8m 비운다
     gRM.fillStyle = 'rgb(0,120,0)'; gRM.fillRect(px(x) - 3, 0, 6, S / 3); // 도료는 아스팔트보다 매끈하다
   }
   for (const x of [-5.7, 5.7]) {
-    gBase.fillStyle = '#D9B44A'; gBase.fillRect(px(x) - 3, 0, 6, S);
+    gBase.fillStyle = st.edge; gBase.fillRect(px(x) - 3, 0, 6, S);
   }
   return { map: toTexture(cBase, true), rmMap: toTexture(cRM, false) };
 }
@@ -252,6 +267,120 @@ export function billboardTexture(variant) {
     g.fillStyle = grad; g.fillRect(0, 0, 256, 128);
     g.fillStyle = 'rgba(255,255,255,.85)';
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 54, 18, 20);
+  }
+  return toTexture(c, true);
+}
+
+// ── 맵별 하늘 ──
+
+// 화면 배경용 하늘. 그라디언트에 태양과 구름을 직접 그려 둔다(배경은 화면에 고정되지만 아케이드 게임에서는 충분하다)
+export function skyTexture({ stops, sun = null, clouds = 0, cloudColor = '255,255,255', stars = 0 }) {
+  const W = 1024, H = 512;
+  const [c, g] = canvas(W, H);
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  for (const [t, col] of stops) grad.addColorStop(t, col);
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < stars; i++) { // 별: 위쪽일수록 많게
+    g.fillStyle = `rgba(255,255,255,${0.2 + Math.random() * 0.6})`;
+    g.fillRect(Math.random() * W, Math.random() ** 2 * H * 0.6, 1.2, 1.2);
+  }
+  if (sun) {
+    const [x, y, r, col] = sun;
+    const halo = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * 6);
+    halo.addColorStop(0, `rgba(${col},0.9)`); halo.addColorStop(0.15, `rgba(${col},0.35)`); halo.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = halo; g.fillRect(0, 0, W, H);
+    g.fillStyle = `rgb(${col})`; g.beginPath(); g.arc(x * W, y * H, r, 0, Math.PI * 2); g.fill();
+  }
+  for (let i = 0; i < clouds; i++) { // 뭉게구름: 반투명 원을 겹쳐 그린다
+    const cx = Math.random() * W, cy = H * (0.15 + Math.random() * 0.5), w = 60 + Math.random() * 140;
+    for (let k = 0; k < 7; k++) {
+      const rx = cx + (Math.random() - 0.5) * w, ry = cy + (Math.random() - 0.5) * w * 0.25, rr = w * (0.18 + Math.random() * 0.2);
+      const cg = g.createRadialGradient(rx, ry, 0, rx, ry, rr);
+      cg.addColorStop(0, `rgba(${cloudColor},0.55)`); cg.addColorStop(1, `rgba(${cloudColor},0)`);
+      g.fillStyle = cg; g.fillRect(rx - rr, ry - rr, rr * 2, rr * 2);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// 반사용 환경맵(등장방형). 위는 하늘색, 아래는 땅색, 태양 방향에 밝은 점을 둔다.
+// 낮 맵에서 밤 HDRI를 쓰면 차체에 어두운 밤하늘이 비쳐 어색하므로 맵마다 하늘에 맞는 반사를 만든다
+export function envTexture({ top, horizon, ground, sun = null }) {
+  const W = 256, H = 128;
+  const [c, g] = canvas(W, H);
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, top); grad.addColorStop(0.48, horizon); grad.addColorStop(0.52, ground); grad.addColorStop(1, ground);
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  if (sun) {
+    const [u, v, col] = sun;
+    const sg = g.createRadialGradient(u * W, v * H, 0, u * W, v * H, 18);
+    sg.addColorStop(0, `rgb(${col})`); sg.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = sg; g.fillRect(0, 0, W, H);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  return t;
+}
+
+// 지중해풍 파스텔 외벽: 흰 창틀, 나무 덧창, 발코니 난간. 낮이라 발광 맵이 없다
+const PASTELS = ['#F2D7B6', '#E8B4A0', '#BFD9E8', '#F4F1E8', '#F2E28C', '#CFE3C4', '#E9C9D8'];
+const SHUTTERS = ['#2E6E6A', '#2F5E9E', '#7A4A2A', '#3E7D3A'];
+export function dayFacadeTextures(variant) {
+  const W = 256, H = 512, cols = 4, rows = 16;
+  const cw = W / cols, ch = H / rows;
+  const wall = PASTELS[variant % PASTELS.length];
+  const shutter = SHUTTERS[variant % SHUTTERS.length];
+  const [cBase, gBase] = canvas(W, H);
+  const [cRM, gRM] = canvas(W, H);
+  gBase.fillStyle = wall; gBase.fillRect(0, 0, W, H);
+  for (let i = 0; i < 2500; i++) { // 회벽 질감
+    gBase.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${Math.random() * 0.06})`;
+    gBase.fillRect(Math.random() * W, Math.random() * H, 3 + Math.random() * 8, 3 + Math.random() * 8);
+  }
+  gRM.fillStyle = 'rgb(0,230,0)'; gRM.fillRect(0, 0, W, H);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = c * cw + cw * 0.28, y = r * ch + ch * 0.18, w = cw * 0.44, h = ch * 0.64;
+      gBase.fillStyle = '#FFFFFF'; gBase.fillRect(x - 2, y - 2, w + 4, h + 4); // 창틀
+      gBase.fillStyle = '#29394A'; gBase.fillRect(x, y, w, h); // 유리
+      gRM.fillStyle = 'rgb(0,40,120)'; gRM.fillRect(x, y, w, h); // 유리는 매끈하게 하늘을 비춘다
+      if (Math.random() < 0.6) { // 열린 덧창
+        gBase.fillStyle = shutter;
+        gBase.fillRect(x - w * 0.45, y, w * 0.4, h); gBase.fillRect(x + w * 1.05, y, w * 0.4, h);
+      }
+      if (r % 3 === 0 && Math.random() < 0.5) { // 발코니 난간
+        gBase.fillStyle = 'rgba(40,40,40,.8)'; gBase.fillRect(x - 6, y + h - 4, w + 12, 3);
+        for (let k = 0; k < 6; k++) gBase.fillRect(x - 6 + k * (w + 12) / 5, y + h - 4, 1.5, 8);
+      }
+    }
+  }
+  return { map: toTexture(cBase, true), rmMap: toTexture(cRM, false) };
+}
+
+// 바위 절벽
+export function rockTexture() {
+  const S = 256;
+  const [c, g] = canvas(S, S);
+  g.fillStyle = '#8A7A68'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 1400; i++) {
+    const v = 90 + Math.random() * 70;
+    g.fillStyle = `rgba(${v},${v * 0.9},${v * 0.8},.5)`;
+    g.fillRect(Math.random() * S, Math.random() * S, 4 + Math.random() * 18, 2 + Math.random() * 6); // 가로 지층
+  }
+  return toTexture(c, true);
+}
+
+// 모래사장
+export function sandTexture() {
+  const S = 256;
+  const [c, g] = canvas(S, S);
+  g.fillStyle = '#E8D3A8'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 8000; i++) {
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? '120,100,70' : '255,250,235'},.25)`;
+    g.fillRect(Math.random() * S, Math.random() * S, 1.2, 1.2);
   }
   return toTexture(c, true);
 }

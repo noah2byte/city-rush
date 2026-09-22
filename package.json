@@ -9,7 +9,8 @@
     "dev": "vite",
     "prebuild": "node scripts/build-assets.mjs --if-missing",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "models": "node scripts/process-models.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

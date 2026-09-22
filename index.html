@@ -19,23 +19,48 @@
   <div id="zone"></div>
   <div id="toast"></div>
   <div id="banners"></div>
+  <canvas id="speedlines"></canvas>
+  <div id="flash"></div>
+  <button id="item" class="empty hidden" type="button" aria-label="아이템 사용 (Space)"><span id="itemIcon"></span><small id="itemName"></small><em>Space</em></button>
   <canvas id="confetti"></canvas>
 
-  <div id="start" class="overlay"><div class="card">
-    <h1>도심 질주</h1>
-    <p>밤의 서울을 3바퀴 도는 레이스.<br>라이벌 7대를 제치고 1등으로 들어와라.</p>
-    <p class="keys">←/→ 또는 A/D 조향 · ↑/W 가속 · ↓/S 브레이크<br>커브에서는 바깥으로 밀리니 핸들을 꺾어 버텨라<br>주황 화살표 패드를 밟으면 부스트<br>모바일은 화면을 좌우로 끌어 조향 (자동 가속)</p>
-    <p id="bestLine" class="keys"></p>
-    <button id="startBtn" disabled>불러오는 중</button>
-  </div></div>
+  <div id="garage" class="overlay garage">
+    <div class="garage-title">
+      <h1>도심 질주</h1>
+      <p>밤의 서울을 3바퀴 도는 레이스. 라이벌 7대를 제치고 1등으로 들어와라.</p>
+    </div>
+    <div id="garagePanel" class="card garage-panel loading" data-step="1">
+      <div class="step step1">
+      <div class="model-row">
+        <button id="prevModel" class="arrow" type="button" aria-label="이전 차">◀</button>
+        <div class="model-name"><strong id="modelName">불러오는 중</strong><span id="modelKind"></span></div>
+        <button id="nextModel" class="arrow" type="button" aria-label="다음 차">▶</button>
+      </div>
+      <div id="colors" class="colors" role="radiogroup" aria-label="차 색상"></div>
+      <div id="colorName" class="color-name"></div>
+      </div>
+      <div class="step step2">
+        <div class="model-row">
+          <button id="prevMap" class="arrow" type="button" aria-label="이전 맵">◀</button>
+          <div class="model-name"><strong id="mapName"></strong><span id="mapIndex"></span></div>
+          <button id="nextMap" class="arrow" type="button" aria-label="다음 맵">▶</button>
+        </div>
+        <p id="mapDesc" class="map-desc"></p>
+      </div>
+      <p class="keys">←/→ 조향 · ↑ 가속 · ↓ 브레이크 · Space 아이템<br>? 상자로 아이템 획득 · 앞차 뒤에 붙으면 슬립스트림 · 옆으로 세게 들이받으면 스핀<br>GO 직전에 ↑를 누르면 로켓 스타트 · 모바일은 화면을 끌어 조향</p>
+      <p id="bestLine" class="keys"></p>
+      <div class="btns"><button id="backBtn" class="ghost" type="button" hidden>이전</button><button id="startBtn" disabled>불러오는 중</button></div>
+    </div>
+  </div>
 
   <p class="credit">차량 모델: Car Concept by Eric Chadwick, Darmstadt Graphics Group (CC BY 4.0) · 환경맵: Poly Haven (CC0)</p>
 
   <div id="result" class="overlay hidden"><div class="card wide">
     <h2 id="resultTitle">완주</h2>
     <table><tbody id="resultTable"></tbody></table>
+    <p id="resultOdds" class="odds"></p>
     <p id="resultBest" class="keys"></p>
-    <button id="retryBtn">다시 달리기</button>
+    <div class="btns"><button id="retryBtn">다시 달리기</button><button id="garageBtn" class="ghost">차 바꾸기</button></div>
   </div></div>
 
   <script type="module" src="/src/main.js"></script>
